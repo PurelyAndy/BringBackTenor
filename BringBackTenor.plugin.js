@@ -12,25 +12,20 @@
 const { Webpack, Patcher } = BdApi;
 const API_V2_KEY = 'AIzaSyAp4Ie-x-F5nLqwoqvDFrJGI4purWdGIVo';
 
-const KlipyTextModule = Webpack.getBySource('="Klipy"');
-let foundSearchKlipy;
-for (const key in KlipyTextModule) {
-    if (KlipyTextModule[key].toString().includes('intl')) {
-        foundSearchKlipy = key;
-        break;
-    }
-}
+const KlipyTextModule = Webpack.getMangled(
+    '="Klipy"',
+    { getSearchKlipyText: e => e instanceof Function && e.toString().includes('intl') },
+);
 
-const decls = Webpack.getBySource(`type:"GIF_PICKER_SUGGESTIONS_SUCCESS",`, { raw: true }).declarations;
-let foundSearch;
-let foundTrending;
-let foundTrendingCategories;
-for (const key in decls) {
-    if (decls[key].toString().includes('(){var')) foundSearch = key;
-    if (decls[key].toString().includes('.GIFS_TRENDING_GIFS,')) foundTrending = key;
-    if (decls[key].toString().includes('.GIFS_TRENDING,')) foundTrendingCategories = key;
-    if (foundSearch && foundTrending && foundTrendingCategories) break;
-}
+const GIFPicker = Webpack.getMangled(
+    'type:"GIF_PICKER_SUGGESTIONS_SUCCESS",',
+    {
+        foundSearch: Filters.byStrings('(){var'),
+        foundTrending: Filters.byStrings('.GIFS_TRENDING_GIFS,'),
+        foundTrendingCategories: Filters.byStrings('.GIFS_TRENDING,'),
+    },
+    { mapDeclarations: true }
+);
 
 const { GIFPickerViewStore, LocaleStore } = Webpack.Stores;
 const Dispatcher = GIFPickerViewStore._dispatcher
@@ -42,9 +37,9 @@ function getMediaFormat(mediaFormat) {
 
 module.exports = class BringBackTenor {
     start() {
-        Patcher.after('BringBackTenor', KlipyTextModule, foundSearchKlipy, (_, __, ret) => ret.replace('Klipy', 'Tenor'))
+        Patcher.after('BringBackTenor', KlipyTextModule, "getSearchKlipyText", (_, __, ret) => ret.replace('Klipy', 'Tenor'))
         
-        Patcher.instead('BringBackTenor', decls, foundSearch, (_, args, __) => {
+        Patcher.instead('BringBackTenor', GIFPicker, "foundSearch", (_, args, __) => {
             const query = args[0];
             fetchSearchResults(query).then(results => {
                 Dispatcher.dispatch({
@@ -55,7 +50,7 @@ module.exports = class BringBackTenor {
             });
         });
 
-        Patcher.instead('BringBackTenor', decls, foundTrending, (_, __, ___) => {
+        Patcher.instead('BringBackTenor', GIFPicker, "foundTrending", (_, __, ___) => {
             fetchTrendingGifsResults(50).then(results => {
                 Dispatcher.dispatch({
                     type: "GIF_PICKER_QUERY_SUCCESS",
@@ -64,7 +59,7 @@ module.exports = class BringBackTenor {
             });
         });
 
-        Patcher.instead('BringBackTenor', decls, foundTrendingCategories, (_, __, ___) => {
+        Patcher.instead('BringBackTenor', GIFPicker, "foundTrendingCategories", (_, __, ___) => {
             Promise.all([
                 fetchTrendingSearchResults(),
                 fetchTrendingGifsResults(1)

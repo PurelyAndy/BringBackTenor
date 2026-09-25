@@ -10,6 +10,8 @@
  */
 
 const { Webpack, Patcher } = BdApi;
+const Filters = Webpack.Filters;
+
 const API_V2_KEY = 'AIzaSyAp4Ie-x-F5nLqwoqvDFrJGI4purWdGIVo';
 
 const KlipyTextModule = Webpack.getMangled(
